@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import requests
 import sys
 import time
@@ -10,18 +10,21 @@ number_of_tables = 5
 number_of_waiters = 3
 tables = []
 waiters = []
+orders_to_be_served = []
+SERVED_ORDERS = []
 
 
 class Waiter:
-    def __init__(self):
+    def __init__(self, ident):
         self.wait_time = None
         self.order = None
         self.orders = []
+        self.ident = ident
 
     def pick_order(self):
         for table in tables:
             if table.state == 1:
-                self.order = table.generate_order()
+                self.order = table.generate_order(self.ident)
                 self.wait_time = random.randint(1, 4)
                 self.orders.append(self.order)
                 time.sleep(self.wait_time)
@@ -33,8 +36,9 @@ class Waiter:
 
 
 class Table:
-    def __init__(self):
+    def __init__(self, identification):
         self.state = 1
+        self.id = identification
 
     def change_state(self):
         if self.state < 3:
@@ -42,7 +46,7 @@ class Table:
         else:
             self.state = 1
 
-    def generate_order(self):
+    def generate_order(self, ident):
         seed_value = random.randrange(sys.maxsize)
         random.seed(seed_value)
         max_wait_time = 0
@@ -60,6 +64,8 @@ class Table:
         order["items"] = items
         order["priority"] = random.randint(1, 5)
         order["max_wait"] = max_wait_time * 1.3
+        order["table_id"] = self.id
+        order["waiter_id"] = ident
         ORDER_ID += 1
 
         self.change_state()
@@ -67,11 +73,11 @@ class Table:
 
 
 for i in range(number_of_tables):
-    t = Table()
+    t = Table(i)
     tables.append(t)
 
 for j in range(number_of_waiters):
-    w = Waiter()
+    w = Waiter(j)
     waiters.append(w)
 
 
@@ -95,20 +101,26 @@ def start(waiter):
 app = Flask(__name__)
 
 
-@app.route('/kitchen_data')
-def hello_world():
-    url = "http://172.17.0.2:8080/app?id=1"
-    return requests.get(url).text
-
-
 @app.route('/start')
 def start_hall_simulation():
     with concurrent.futures.ThreadPoolExecutor() as executor:
         while True:
             results = [executor.submit(start, waiter) for waiter in waiters]
             for f in concurrent.futures.as_completed(results):
-                continue
+                pass
             return jsonify(f.result())
+
+
+@app.route('/serve_order', methods=["POST", "GET"])
+def serve_order():
+    if request.method == "POST":
+        input_json = request.get_json(force=True)
+        SERVED_ORDERS.append(input_json)
+        for table in tables:
+            if table.id == input_json["table_id"]:
+                t.change_state()
+    else:
+        return jsonify(SERVED_ORDERS)
 
 
 if __name__ == "__main__":
