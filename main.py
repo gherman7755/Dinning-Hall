@@ -12,6 +12,7 @@ tables = []
 waiters = []
 orders_to_be_served = []
 SERVED_ORDERS = []
+TIME_UNIT = 20
 
 
 class Waiter:
@@ -22,14 +23,15 @@ class Waiter:
         self.ident = ident
 
     def pick_order(self):
+        # for i in range(0, len(tables), self.ident + 1):
         for table in tables:
-            if table.state == 1:
-                self.order = table.generate_order(self.ident)
+            if table.state == 1:  # tables[i].state
+                self.order = table.generate_order(self.ident)  # tables[i].generate
                 self.wait_time = random.randint(1, 4)
                 self.orders.append(self.order)
                 time.sleep(self.wait_time)
                 self.send_order()
-                break
+                # break
 
     def send_order(self):
         res = requests.post('http://172.17.0.2:8080/get_order', json=self.order)
@@ -43,7 +45,7 @@ class Table:
     def change_state(self):
         if self.state < 3:
             self.state += 1
-        else:
+        elif self.state == 3:
             self.state = 1
 
     def generate_order(self, ident):
@@ -80,7 +82,6 @@ for j in range(number_of_waiters):
     w = Waiter(j)
     waiters.append(w)
 
-
 foods = [{"id": 1, "name": "pizza", "preparation-time": 20, "complexity": 2, "cooking-apparatus": "oven"},
          {"id": 2, "name": "salad", "preparation-time": 10, "complexity": 1, "cooking-apparatus": None},
          {"id": 3, "name": "zeama", "preparation-time": 7, "complexity": 1, "cooking-apparatus": "stove"},
@@ -108,17 +109,21 @@ def start_hall_simulation():
             results = [executor.submit(start, waiter) for waiter in waiters]
             for f in concurrent.futures.as_completed(results):
                 pass
-            return jsonify(f.result())
 
 
 @app.route('/serve_order', methods=["POST", "GET"])
 def serve_order():
     if request.method == "POST":
         input_json = request.get_json(force=True)
+        delivered_time = time.time()
+        input_json["time"] = (delivered_time - input_json["time"]) * TIME_UNIT
         SERVED_ORDERS.append(input_json)
         for table in tables:
+            SERVED_ORDERS.append(table.state)
             if table.id == input_json["table_id"]:
-                t.change_state()
+                table.change_state()
+                table.change_state()
+        return jsonify(SERVED_ORDERS)
     else:
         return jsonify(SERVED_ORDERS)
 
